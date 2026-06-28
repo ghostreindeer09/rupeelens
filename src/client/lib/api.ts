@@ -10,7 +10,14 @@
 //   - throws a typed ApiError with the server's error message on
 //     non-2xx responses, so callers can catch and display it directly
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+// In production, the frontend is served by the same Express server as
+// the API, so requests should be relative (empty base = same-origin).
+// In local dev, Vite serves the frontend on a different port, so we
+// need an absolute URL pointing at the backend — VITE_API_BASE_URL lets
+// you override this; otherwise it falls back to localhost:3000.
+const API_BASE = import.meta.env.PROD
+  ? ""
+  : (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000");
 
 export class ApiError extends Error {
   status: number;
@@ -37,7 +44,11 @@ interface RequestOptions {
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
-  const url = new URL(path, API_BASE);
+  // new URL() requires a valid absolute base; an empty string (our
+  // same-origin production case) isn't one, so fall back to the
+  // current page's origin explicitly.
+  const base = API_BASE || window.location.origin;
+  const url = new URL(path, base);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) url.searchParams.set(key, String(value));

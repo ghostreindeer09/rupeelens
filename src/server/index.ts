@@ -4,6 +4,8 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { env, corsOrigins } from "./lib/env.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
@@ -32,20 +34,30 @@ app.use(helmet());
 // --- CORS lockdown ---
 // Only the configured origin(s) may call this API with credentials.
 // No wildcard "*" is ever used because we rely on cookies (credentials: true).
-app.use(
+//
+// In production the frontend is served from this same Express process,
+// so browser requests carry an Origin header matching this server's own
+// host — that's same-origin traffic, not cross-origin, and must be
+// allowed even though it won't appear in CORS_ORIGIN (which is meant
+// for genuinely separate frontend deployments).
+app.use((req, res, next) => {
   cors({
     origin: (origin, callback) => {
-      // Allow same-origin / server-to-server requests with no Origin header
-      // (e.g. curl, the cron job hitting its own API internally).
       if (!origin) return callback(null, true);
       if (corsOrigins.includes(origin)) return callback(null, true);
+
+      // Same-origin check: does the Origin header match this server's
+      // own scheme+host? (e.g. the frontend, served by this same process)
+      const selfOrigin = `${req.protocol}://${req.get("host")}`;
+      if (origin === selfOrigin) return callback(null, true);
+
       return callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
-  })
-);
+  })(req, res, next);
+});
 
 // --- Body parsing with strict size limits ---
 // Small limit for normal JSON bodies; the CSV import route sets its own
@@ -66,6 +78,24 @@ app.use("/api/analytics", requireAuth, analyticsRoutes);
 app.use("/api/budgets", requireAuth, budgetRoutes);
 app.use("/api/recurring", requireAuth, recurringRoutes);
 app.use("/api/gmail", gmailRoutes); // has its own mixed auth (user JWT + cron secret)
+
+// --- Serve the built frontend in production ---
+// In local dev, Vite's own dev server handles the frontend on a
+// different port (5173), so this block only matters when deployed,
+// where a single web service serves both the API and the static build.
+if (env.NODE_ENV === "production") {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const distDir = path.join(__dirname, "../../dist");
+
+  app.use(express.static(distDir));
+
+  // SPA fallback: any non-API, non-auth route serves index.html so
+  // client-side routing (React Router) handles the path.
+  app.get(/^(?!\/api|\/auth).*/, (req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+}
 
 // --- 404 fallback ---
 app.use((req, res) => {

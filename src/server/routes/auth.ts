@@ -72,8 +72,12 @@ router.get("/google/callback", authLimiter, async (req, res) => {
     issueSessionCookie(res, user.id);
     issueCsrfToken(res);
 
-    const frontendUrl = env.CORS_ORIGIN.split(",")[0].trim();
-    res.redirect(frontendUrl);
+    // In production the frontend is served from this same origin, so a
+    // relative redirect is correct. In local dev the frontend runs on a
+    // different port (Vite's dev server), so redirect there explicitly.
+    const redirectTarget =
+      env.NODE_ENV === "production" ? "/" : env.CORS_ORIGIN.split(",")[0].trim();
+    res.redirect(redirectTarget);
   } catch (err) {
     console.error("[auth] Google OAuth callback failed:", (err as Error).message);
     res.status(500).json({ error: "Authentication failed" });
