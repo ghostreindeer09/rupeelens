@@ -3,19 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev:client": "vite",
     "dev:server": "tsx watch src/server/index.ts",
     "build": "vite build",
-    "build:all": "npm run prisma:generate && npm run build",
+    "build:all": "npm run prisma:generate && npm run prisma:migrate:deploy && npm run prisma:seed && npm run build",
     "start": "tsx src/server/index.ts",
-    "postinstall": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "postinstall": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:migrate:deploy": "npx prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "db:backup": "bash scripts/backup-db.sh",
     "db:restore": "bash scripts/restore-db.sh",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "npx prisma generate",
     "lint": "eslint src --ext .ts,.tsx",
     "audit:check": "npm audit --omit=dev"
   },
