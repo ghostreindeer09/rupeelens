@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  name              String?
+  avatarUrl         String?
+  googleId          String   @unique
+  gmailConnected    Boolean  @default(false)
+  gmailAccessToken  String?  // encrypted at rest
+  gmailRefreshToken String?  // encrypted at rest
+  gmailSyncedAt     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  transactions   Transaction[]
+  categories     Category[]
+  budgets        Budget[]
+  recurringItems RecurringItem[]
+  accounts       Account[]
+}
+
+model Transaction {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount  Decimal  @db.Decimal(12, 2) // always positive
+  type    TxnType
+  merchant String // raw merchant name from email
+  note    String? // user-editable note
+  date    DateTime
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
+
+  source           TxnSource
+  upiApp           UpiApp?
+  emailId          String?   @unique // Gmail message ID — prevents duplicates
+  rawEmailSnippet  String?   // first 300 chars of email body, for debugging
+
+  isReviewed  Boolean @default(false) // user confirmed auto-import
+  isRecurring Boolean @default(false)
+
+  recurringId   String?
+  recurringItem RecurringItem? @relation(fields: [recurringId], references: [id])
+
+  deletedAt DateTime? // soft delete
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@index([emailId])
+}
+
+model Category {
+  id       String  @id @default(uuid())
+  userId   String? // null = system default category
+  user     User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name     String
+  icon     String  // Tabler icon name e.g. "home", "shopping-bag"
+  colour   String  // hex e.g. "#F59E0B"
+  isSystem Boolean @default(false)
+
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@unique([userId, name])
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  limitAmount Decimal  @db.Decimal(12, 2)
+  month       Int      // 1–12
+  year        Int
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, categoryId, month, year])
+}
+
+model RecurringItem {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String    // e.g. "Rent", "Netflix"
+  amount       Decimal   @db.Decimal(12, 2)
+  type         TxnType
+  categoryId   String?
+  dayOfMonth   Int       // 1–28
+  upiApp       UpiApp?
+  isActive     Boolean   @default(true)
+  lastLoggedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  transactions Transaction[]
+}
+
+model Account {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String      // e.g. "HDFC Savings", "PhonePe Wallet"
+  type      AccountType
+  balance   Decimal?    @db.Decimal(14, 2)
+  currency  String      @default("INR")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  transactions Transaction[]
+}
+
+enum TxnType {
+  DEBIT
+  CREDIT
+}
+
+enum TxnSource {
+  GMAIL
+  MANUAL
+  CSV_IMPORT
+  RECURRING
+}
+
+enum UpiApp {
+  PHONEPE
+  GPAY
+  PAYTM
+  AMAZON_PAY
+  CRED
+  OTHER
+}
+
+enum AccountType {
+  SAVINGS
+  WALLET
+  CREDIT
+  FD
+  MF
+  LOAN
+}

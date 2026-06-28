@@ -1,0 +1,24 @@
+node_modules/
+dist/
+dist-ssr/
+.env
+.env.*.local
+*.local
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Database backups — contain real financial data, never commit
+backups/
+
+# Logs — never commit logs, they must never contain raw email bodies or tokens
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# PWA generated files
+dev-dist/
